@@ -75,24 +75,23 @@ The CALM protocol operates at Layer 2 (Data Link Layer) and defines the structur
 Frame Format
 [TYPE]:[ORIGIN]:[DESTINATION]:[TTL]:[ROUTE]:[CONTENT]|[CRC]
 
-Field		Description
+Field		      Description
 TYPE	        N (Normal), R (Redirection), B (Beacon), E (Beacon Response), Q (User Search), U (User Notification)
-ORIGIN	        Node ID that sent the frame
-DESTINATION	Recipient node ID (0 = Broadcast)
-TTL	        Time To Live (remaining hops)
+ORIGIN	      Node ID that sent the frame
+DESTINATION	  Recipient node ID (0 = Broadcast)
+TTL	          Time To Live (remaining hops)
 ROUTE	        List of nodes the frame has passed through
-CONTENT	        Message payload or system command
-CRC	        Integrity verification code (Layer 2)
+CONTENT	      Message payload or system command
+CRC	          Integrity verification code (Layer 2)
 
 Frame Types
-
 Type	Description
-N	Normal Frame (user or system)
-R	Redirection Frame (in transit)
-B	Beacon (neighbor detection)
-E	Beacon Response
-Q	User Search in mesh
-U	User Location Notification
+N	    Normal Frame (user or system)
+R	    Redirection Frame (in transit)
+B	    Beacon (neighbor detection)
+E	    Beacon Response
+Q	    User Search in mesh
+U	    User Location Notification
 
 Layer 2 Features
   - Neighbor Detection: Periodic beacons to maintain neighbor tables
@@ -199,15 +198,15 @@ SisME-LoRa-Protocol-CALM/
 The backend exposes an API for LoRa nodes to communicate:
 
 Method	  Endpoint	                  Description
-POST	  /api/send-message/	          Send a message from a LoRa node to the server
-GET	  /api/get-messages/	          Get pending messages for a node
-POST	  /api/update-node/	          Register or update a LoRa node
-PUT	  /api/update-node/<id>/	  Update a node's status
-PUT	  /api/mark-delivered/<id>/	  Mark a message as delivered
-GET	  /api/node-status/	          Get status of all nodes
-GET	  /api/users-index/	          List all registered users
-POST	  /api/sync-user/	          Sync a user on the server
-POST	  /api/update-user-location/	  Update a user's location
+POST	    /api/send-message/	        Send a message from a LoRa node to the server
+GET	      /api/get-messages/	        Get pending messages for a node
+POST	    /api/update-node/	          Register or update a LoRa node
+PUT	      /api/update-node/<id>/	    Update a node's status
+PUT	      /api/mark-delivered/<id>/	  Mark a message as delivered
+GET	      /api/node-status/	          Get status of all nodes
+GET	      /api/users-index/	          List all registered users
+POST	    /api/sync-user/	            Sync a user on the server
+POST	    /api/update-user-location/	Update a user's location
 
 🤝 Contributing
 Contributions are welcome! Please open an issue first to discuss what you would like to implement.
@@ -223,7 +222,7 @@ Massimo Larger & Claudio Uribe
 📧 Contact
 For any questions or suggestions, feel free to contact us at:
 
-    massimoalv.27@gmail.com/[Claudio's email]
+    massimoalv.27@gmail.com/
 
 🌟 Acknowledgments
 

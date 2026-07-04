@@ -10,7 +10,6 @@ LoRa ESP32 Red en Malla Comunicación de Emergencia Django Protocolo CALM IoT Re
 SisME (Sistema de Mensajería de Emergencia) es una plataforma de comunicación descentralizada diseñada para situaciones críticas donde las redes tradicionales (WiFi, Internet) fallan. Combina una interfaz web amigable con una robusta malla de radiofrecuencia LoRa que opera bajo el protocolo CALM.
 
 CALM es un protocolo RAW de capa 2 (nivel de enlace de datos) desarrollado específicamente para este sistema, que permite:
-
     - Enrutamiento dinámico en malla a nivel de capa 2.
     - Mensajería broadcast y unicast.
     - Encriptación AES-128 de extremo a extremo.
@@ -78,22 +77,22 @@ Formato de Frame CALM
 
 [TIPO]:[ORIGEN]:[DESTINO]:[TTL]:[RUTA]:[CONTENIDO]|[CRC]
 
-- TIPO: 	N (Normal), R (Redirección), B (Beacon), E (Respuesta Beacon), Q (Búsqueda Usuario), U (Notificación Usuario).
-- ORIGEN: 	ID del nodo que envió el frame.
-- DESTINO: 	ID del nodo destinatario (0 = Broadcast).
-- TTL: 		Tiempo de vida (hops restantes).
-- RUTA: 	Lista de nodos por los que ha pasado el frame.
-- CONTENIDO: 	Payload del mensaje o comando de sistema.
-- CRC: 		Código de verificación de integridad (capa 2).
+TIPO: 	    N (Normal), R (Redirección), B (Beacon), E (Respuesta Beacon), Q (Búsqueda Usuario), U (Notificación Usuario).
+ORIGEN: 	ID del nodo que envió el frame.
+DESTINO: 	ID del nodo destinatario (0 = Broadcast).
+TTL: 		Tiempo de vida (hops restantes).
+RUTA: 	    Lista de nodos por los que ha pasado el frame.
+CONTENIDO: 	Payload del mensaje o comando de sistema.
+CRC: 		Código de verificación de integridad (capa 2).
 
 Tipos de Frames CALM
 Tipo	Descripción
-N	Frame Normal (usuario o sistema)
-R	Redirección (frame en tránsito)
-B	Beacon (detección de vecinos)
-E	Respuesta Beacon
-Q	Búsqueda de Usuario en la malla
-U 	Notificación de Ubicación de Usuario
+N	    Frame Normal (usuario o sistema)
+R	    Redirección (frame en tránsito)
+B	    Beacon (detección de vecinos)
+E	    Respuesta Beacon
+Q	    Búsqueda de Usuario en la malla
+U 	    Notificación de Ubicación de Usuario
 
 Características de Capa 2
     - Detección de Vecinos: Beacons periódicos para mantener la tabla de vecinos.
@@ -104,7 +103,6 @@ Características de Capa 2
 ⚙️ Instalación y Configuración
 
 1. Clonar el Repositorio
-
     git clone https://github.com/SasakiRyo27/SisME-LoRa-Protocol-CALM
     cd SisME-LoRa-Protocol-CALM
 
@@ -143,7 +141,6 @@ Abrir cualquiera de los siguientes archivos .ino:
 Configurar el DISPOSITIVO_ID de forma única para cada nodo (1, 2, 3...).
 
 En el heltec_master_node.ino, configurar las credenciales WiFi y la IP del servidor Django:
-
     const char* wifi_ssid = "TuRedWiFi";
     const char* wifi_password = "TuContraseña";
     const char* django_server = "http://x.x.x.x:8000"; // IP del servidor SisME
@@ -202,13 +199,13 @@ El backend expone una API para que los nodos LoRa se comuniquen:
 
 Método	Endpoint	                Descripción
 POST	/api/send-message/	        Envía un mensaje desde un nodo LoRa al servidor.
-GET	/api/get-messages/	        Obtiene mensajes pendientes para un nodo.
+GET	    /api/get-messages/	        Obtiene mensajes pendientes para un nodo.
 POST	/api/update-node/	        Registra o actualiza un nodo LoRa.
-PUT	/api/update-node/<id>/	    	Actualiza el estado de un nodo.
-PUT	/api/mark-delivered/<id>/	Marca un mensaje como entregado.
-GET	/api/node-status/	        Obtiene el estado de todos los nodos.
-GET	/api/users-index/	        Lista todos los usuarios registrados.
-POST	/api/sync-user/	            	Sincroniza un usuario en el servidor.
+PUT	    /api/update-node/<id>/	    Actualiza el estado de un nodo.
+PUT	    /api/mark-delivered/<id>/	Marca un mensaje como entregado.
+GET	    /api/node-status/	        Obtiene el estado de todos los nodos.
+GET	    /api/users-index/	        Lista todos los usuarios registrados.
+POST	/api/sync-user/	            Sincroniza un usuario en el servidor.
 POST	/api/update-user-location/	Actualiza la ubicación de un usuario.
 
 🤝 Contribuciones
