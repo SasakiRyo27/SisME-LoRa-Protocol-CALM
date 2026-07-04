@@ -1,0 +1,117 @@
+<!--
+SisME - Sistema de Mensajería de Emergencia
+Copyright (C) 2026  Massimo Larger & Claudio Uribe
+
+Este programa es software libre: puedes redistribuirlo y/o modificarlo
+bajo los términos de la Licencia Pública General de GNU publicada por
+la Free Software Foundation, ya sea la versión 3 de la Licencia, o
+(a su elección) cualquier versión posterior.
+
+Este programa se distribuye con la esperanza de que sea útil.
+Consulte la Licencia Pública General de GNU para obtener más detalles.
+-->
+
+{% extends 'base.html' %}
+
+{% block title %}Editar Perfil - SisME LoRa{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card shadow-lg border-0 rounded-4">
+            <div class="card-header bg-danger text-white py-3 rounded-top-4 d-flex justify-content-between align-items-center">
+                <h4 class="mb-0 fw-bold"><i class="bi bi-person-gear me-2"></i>Editar mi Perfil</h4>
+                <span class="badge bg-white text-danger fw-bold">ID LoRa: {{ profile.current_node_id|default:"--" }}.{{ profile.sub_id|default:"--" }}</span>
+            </div>
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center shadow-sm" style="width: 80px; height: 80px;">
+                        <i class="bi bi-person-fill text-danger fs-1"></i>
+                    </div>
+                    <h5 class="mt-2 mb-0 fw-bold text-muted small text-uppercase">Nombre de Usuario</h5>
+                    <h4 class="fw-bold">{{ user.username }}</h4>
+                    <p class="text-muted small">Miembro del Canal de Emergencia</p>
+                </div>
+
+                <hr class="my-4">
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="mb-4">
+                        <label for="{{ form.full_name.id_for_label }}" class="form-label fw-bold small text-uppercase text-danger">
+                            <i class="bi bi-person-vcard me-1"></i>{{ form.full_name.label }}
+                        </label>
+                        {{ form.full_name }}
+                        {% if form.full_name.errors %}
+                            {% for error in form.full_name.errors %}
+                                <div class="text-danger small mt-1"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{ error }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.email.id_for_label }}" class="form-label fw-bold small text-uppercase text-muted">
+                                {{ form.email.label }}
+                            </label>
+                            {{ form.email }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.birth_date.id_for_label }}" class="form-label fw-bold small text-uppercase text-muted">
+                                {{ form.birth_date.label }}
+                            </label>
+                            {{ form.birth_date }}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.zone.id_for_label }}" class="form-label fw-bold small text-uppercase text-muted">
+                            {{ form.zone.label }}
+                        </label>
+                        {{ form.zone }}
+                        <div class="form-text text-muted small">La zona está fijada como General por el momento.</div>
+                    </div>
+
+                    <div class="alert alert-warning py-2 small mt-4 border-0 bg-opacity-10 bg-warning">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-shield-lock-fill me-2 fs-5"></i>
+                            <div>
+                                <strong class="d-block">Seguridad de la cuenta</strong>
+                                <a href="{% url 'password_change' %}" class="text-decoration-none fw-bold text-dark">
+                                    <i class="bi bi-key me-1"></i>Cambiar mi contraseña
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-danger py-2 fw-bold shadow-sm">
+                            <i class="bi bi-save me-2"></i>Guardar Cambios
+                        </button>
+                        <a href="{% url 'chat_room' %}" class="btn btn-light py-2 text-muted">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="text-center mt-4">
+            <small class="text-muted">SisME LoRa - Sistema de Mensajería de Emergencia</small>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card { border-radius: 1.5rem !important; }
+    .rounded-top-4 { border-top-left-radius: 1.5rem !important; border-top-right-radius: 1.5rem !important; }
+    .form-control { border-radius: 0.75rem; padding: 0.6rem 1rem; border: 1px solid #dee2e6; }
+    .form-control:focus {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.1);
+    }
+    .form-control[readonly] { background-color: #f8f9fa; border-color: #e9ecef; }
+    hr { opacity: 0.1; }
+</style>
+{% endblock %}

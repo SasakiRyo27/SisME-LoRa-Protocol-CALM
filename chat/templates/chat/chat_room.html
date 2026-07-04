@@ -1,0 +1,1062 @@
+<!--
+SisME - Sistema de Mensajería de Emergencia
+Copyright (C) 2026  Massimo Larger & Claudio Uribe
+
+Este programa es software libre: puedes redistribuirlo y/o modificarlo
+bajo los términos de la Licencia Pública General de GNU publicada por
+la Free Software Foundation, ya sea la versión 3 de la Licencia, o
+(a su elección) cualquier versión posterior.
+
+Este programa se distribuye con la esperanza de que sea útil.
+Consulte la Licencia Pública General de GNU para obtener más detalles.
+-->
+
+{% extends 'base.html' %}
+
+{% block title %}Chat de Emergencia - SisME LoRa{% endblock %}
+
+{% block content %}
+<!-- Barra Lateral de Amigos (Contactos Recientes) -->
+<div id="recent-contacts-bar" class="bg-dark shadow-lg d-flex flex-column align-items-center py-3" style="position: fixed; left: 0; top: 0; bottom: 0; width: 60px; padding-top: 56px; z-index: 1030;">
+    <div class="text-light mb-4" title="Contactos Recientes">
+        <i class="bi bi-person-lines-fill fs-4"></i>
+    </div>
+    <div id="recent-contacts-list" class="d-flex flex-column gap-3 w-100 align-items-center">
+        <!-- Los avatares de contactos recientes aparecerán aquí -->
+    </div>
+</div>
+
+<!-- Contenedor de Widgets de Chat (Estilo Gmail) -->
+<div id="chat-widgets-container" class="d-flex flex-row-reverse align-items-end px-3" style="position: fixed; right: 0; bottom: 0; pointer-events: none; z-index: 1040; gap: 10px;">
+    <!-- Los mini-chats se inyectarán aquí -->
+</div>
+
+<div class="mobile-tabs d-flex d-md-none gap-2 mb-2 px-2" style="margin-left: 60px;">
+    <button class="btn btn-sm btn-danger flex-fill" id="mobile-tab-chat" type="button">Chat</button>
+    <button class="btn btn-sm btn-outline-primary flex-fill" id="mobile-tab-panel" type="button">Privado / Red</button>
+</div>
+
+<div id="mobile-contacts-strip" class="d-md-none px-2 pb-2" style="margin-left: 60px;">
+    <div id="mobile-contacts-list" class="d-flex gap-2 overflow-auto" style="scrollbar-width: none;">
+    </div>
+</div>
+
+<div class="row" style="margin-left: 60px;" id="main-layout-row">
+    <!-- Panel Izquierdo: Chat -->
+    <div class="col-md-8 mobile-chat-col">
+        <div class="chat-container mt-0">
+            <div class="emergency-header d-flex justify-content-between align-items-center" style="background-color: #dc3545; color: white; padding: 0.8rem; border-radius: 10px 10px 0 0;">
+                <h4 class="mb-0">Canal de Emergencia - SisME LoRa</h4>
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge bg-info text-dark" id="connected-node-badge">LoRa: {{ active_node_id|default:"--" }}</span>
+                    <span class="badge bg-light text-dark" id="user-id-badge">Mi ID: {{ user_full_id }}</span>
+                    <span class="badge bg-warning text-dark" id="user-zone-badge">Zona: {{ user_zone }}</span>
+                </div>
+            </div>
+            <div class="chat-box d-flex flex-column" id="chat-box" style="background: white; border-radius: 10px; padding: 1rem; height: calc(100vh - 250px); min-height: 400px; overflow-y: scroll; border: 1px solid #dee2e6; gap: 10px;">
+                {% for message in chat_messages %}
+                    <div class="message {% if message.user == user %}message-sent ms-auto{% else %}message-received{% endif %} p-2 border shadow-sm" style="max-width: 85%; border-radius: 10px; word-wrap: break-word; overflow-wrap: break-word; {% if message.user == user %}background-color: #e3f2fd; border-bottom-right-radius: 2px;{% else %}background-color: #f1f1f1; border-bottom-left-radius: 2px;{% endif %}">
+                        <div class="message-header d-flex justify-content-between">
+                            <strong>
+                                {% if message.user %}
+                                    {{ message.user.username }}
+                                {% elif message.node_id %}
+                                    Nodo {{ message.node_id }}
+                                {% else %}
+                                    Sistema
+                                {% endif %}
+                                {% if message.zone_name %}
+                                    <span class="badge bg-secondary" style="font-size: 0.6rem;">{{ message.zone_name }}</span>
+                                {% endif %}
+                                {% if message.is_emergency %}
+                                    <span class="badge bg-danger" style="font-size: 0.6rem;">🚨 EMERGENCIA</span>
+                                {% endif %}
+                            </strong>
+                            <small class="ms-2">{{ message.timestamp|date:"d/m/Y H:i" }}</small>
+                        </div>
+                        <div class="message-body">
+                            {{ message.content }}
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="text-center text-muted mt-3">No hay mensajes aún. Comienza el chat de emergencia.</p>
+                {% endfor %}
+            </div>
+
+            <form id="chat-form" class="mt-3">
+                {% csrf_token %}
+                <div class="input-group">
+                    <input type="text" id="message-input" name="content" class="form-control" placeholder="Escribe tu mensaje de emergencia..." required autofocus autocomplete="off">
+                    <button class="btn btn-danger" type="submit">
+                        <i class="bi bi-send"></i> Enviar
+                    </button>
+                </div>
+                <div class="mt-2">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle"></i> Los mensajes se enviarán por WiFi y por radio LoRa simultáneamente
+                    </small>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Panel Derecho: Monitoreo de Nodos LoRa -->
+    <div class="col-md-4 mt-4 mt-md-0 mobile-side-col">
+        <!-- Lista de Usuarios (Unicast) -->
+        <div class="card shadow-sm mb-3">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 small fw-bold">CHAT PRIVADO</h5>
+                <i class="bi bi-person-lock"></i>
+            </div>
+            <div class="card-body p-2">
+                <div class="input-group input-group-sm mb-2">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
+                    <input type="text" id="user-search" class="form-control border-start-0" placeholder="Buscar por nombre..." onkeyup="searchUsers()">
+                </div>
+            </div>
+            <div class="list-group list-group-flush border-top" id="users-list" style="max-height: 200px; overflow-y: auto;">
+                <div class="list-group-item list-group-item-action active py-2" id="target-broadcast" onclick="selectTarget('broadcast', 'Todos (Broadcast)')">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-megaphone me-2"></i> Todos (Broadcast)</span>
+                        <i class="bi bi-check-circle-fill"></i>
+                    </div>
+                </div>
+                <!-- Los usuarios se cargarán aquí solo al buscar -->
+                <div id="search-placeholder" class="list-group-item text-center text-muted py-3 small">
+                    Escribe para buscar personas...
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 small fw-bold">ESTADO DE LA RED (LoRa)</h5>
+                <i class="bi bi-broadcast"></i>
+            </div>
+            <div class="list-group list-group-flush" id="nodes-list">
+                <div class="list-group-item text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                        <span class="visually-hidden">Cargando...</span>
+                    </div>
+                    <small>Cargando nodos...</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Estadísticas de red -->
+        <div class="card shadow-sm mt-3">
+            <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0 small fw-bold">ESTADÍSTICAS DE RED</h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <small class="text-muted">Nodos activos</small>
+                        <h5 class="mb-0" id="active-nodes-count">0</h5>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">Mensajes hoy</small>
+                        <h5 class="mb-0" id="messages-today">0</h5>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-info mt-3 p-2 shadow-sm" style="font-size: 0.8rem;">
+            <i class="bi bi-info-circle-fill me-2"></i>
+            <strong>Información:</strong>
+            <ul class="mb-0 mt-1 ps-3">
+                <li>Los mensajes se replican en toda la red LoRa</li>
+                <li>Nodos en verde están activos y comunicándose</li>
+                <li>La batería se actualiza cada 30 segundos</li>
+            </ul>
+        </div>
+        
+        <!-- Botón de prueba (para debug) -->
+        <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="testLoRaConnection()">
+            <i class="bi bi-router"></i> Probar conexión LoRa
+        </button>
+    </div>
+</div>
+
+<style>
+    /* Estilos adicionales para móviles */
+    @media (max-width: 576px) {
+        .chat-box {
+            height: calc(100vh - 220px) !important;
+            padding: 0.5rem !important;
+        }
+    .message {
+        max-width: 85% !important;
+        font-size: 0.9rem !important;
+        margin-bottom: 5px !important;
+    }
+        .emergency-header h4 {
+            font-size: 1.1rem !important;
+        }
+        .emergency-header {
+            padding: 0.5rem !important;
+        }
+    }
+
+    @media (max-width: 576px) and (orientation: portrait) {
+        #recent-contacts-bar { display: none !important; }
+        .mobile-tabs { display: flex !important; margin-left: 0 !important; }
+        #mobile-contacts-strip { display: block !important; margin-left: 0 !important; }
+        #main-layout-row { margin-left: 0 !important; }
+        .mobile-chat-col { display: block; }
+        .mobile-side-col { display: none; margin-top: 0 !important; }
+        body.mobile-show-side .mobile-chat-col { display: none; }
+        body.mobile-show-side .mobile-side-col { display: block; }
+        body.mobile-show-side .mobile-side-col .card { margin-bottom: 0.75rem; }
+        body.mobile-show-side .mobile-side-col { padding-bottom: 80px; }
+        body:not(.mobile-show-side) .chat-box { height: calc(100vh - 240px) !important; min-height: 260px !important; }
+    }
+
+    @media (max-width: 991px) and (orientation: landscape) {
+        #recent-contacts-bar { display: none !important; }
+        .mobile-tabs { display: none !important; }
+        #mobile-contacts-strip { display: block !important; margin-left: 0 !important; }
+        #main-layout-row { margin-left: 0 !important; }
+        .mobile-chat-col { display: block; }
+        .mobile-side-col { display: block; margin-top: 0 !important; }
+        .chat-box { height: calc(100vh - 200px) !important; min-height: 220px !important; }
+        .mobile-side-col .card { max-height: calc(100vh - 110px); overflow: auto; }
+    }
+    
+    /* Animación para mensajes de emergencia */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+    
+    .message:has(.bg-danger) {
+        animation: pulse 0.5s ease-in-out;
+        border-left: 4px solid #dc3545 !important;
+    }
+    
+    /* Scrollbar personalizado */
+    .chat-box::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .chat-box::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    .chat-box::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 10px;
+    }
+    
+    .chat-box::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    /* Estilos para los Widgets de Chat */
+    .chat-widget {
+        width: 300px;
+        background: white;
+        border-radius: 10px 10px 0 0;
+        box-shadow: 0 -5px 15px rgba(0,0,0,0.1);
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.3s ease;
+    }
+    
+    .chat-widget-header {
+        padding: 8px 12px;
+        background: #007bff;
+        color: white;
+        border-radius: 10px 10px 0 0;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .chat-widget-body {
+        height: 300px;
+        overflow-y: auto;
+        padding: 10px;
+        background: #f8f9fa;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .chat-widget-footer {
+        padding: 8px;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .contact-avatar {
+        width: 40px;
+        height: 40px;
+        background: #6c757d;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: transform 0.2s;
+        position: relative;
+    }
+    
+    .contact-avatar:hover {
+        transform: scale(1.1);
+        background: #007bff;
+    }
+    
+    .contact-avatar.active {
+        border: 2px solid #007bff;
+        background: #007bff;
+    }
+
+    .contact-avatar.unread {
+        border: 2px solid #dc3545;
+    }
+
+    .mobile-contact {
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        background: #6c757d;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        position: relative;
+        border: 2px solid transparent;
+    }
+
+    .mobile-contact.active {
+        background: #0d6efd;
+        border-color: #0d6efd;
+    }
+
+    .mobile-contact.unread {
+        border-color: #dc3545;
+    }
+
+    .badge-unread {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: #dc3545;
+        color: white;
+        font-size: 0.6rem;
+        padding: 2px 5px;
+        border-radius: 10px;
+    }
+
+    @media (max-width: 576px) {
+        #recent-contacts-bar { display: none !important; }
+        .row { margin-left: 0 !important; }
+        .chat-widget { width: 100%; position: fixed; left: 0; right: 0; bottom: 0; }
+    }
+</style>
+
+<script>
+    const chatBox = document.getElementById('chat-box');
+    const chatForm = document.getElementById('chat-form');
+    const messageInput = document.getElementById('message-input');
+    const currentUser = "{{ user.username }}";
+    const initialConnectedNodeId = {{ active_node_id|default_if_none:"null" }};
+    let connectedNodeId = (typeof initialConnectedNodeId === 'number') ? initialConnectedNodeId : null;
+    let isSyncingNode = false;
+    let activeWidgets = {}; // Almacena widgets abiertos: {username: element}
+    let recentContacts = new Set(JSON.parse(localStorage.getItem(`contacts_${currentUser}`) || '[]'));
+    // Guardamos un objeto {username: fullName} para persistir nombres
+    let openWidgetsData = JSON.parse(localStorage.getItem(`open_widgets_data_${currentUser}`) || '{}');
+    let unreadCounts = JSON.parse(localStorage.getItem(`unread_${currentUser}`) || '{}');
+
+    // Función para abrir un mini-widget de chat (estilo Gmail)
+    function openChatWidget(username, fullName, saveToOpen = true) {
+        if (activeWidgets[username]) {
+            // Si ya está abierto, enfocar el input
+            clearUnread(username);
+            activeWidgets[username].querySelector('input').focus();
+            return;
+        }
+
+        recentContacts.add(username);
+        if (saveToOpen) {
+            openWidgetsData[username] = fullName || username;
+            savePersistenceData();
+        }
+        clearUnread(username);
+        updateRecentContactsUI();
+
+        const widget = document.createElement('div');
+        widget.className = 'chat-widget';
+        widget.id = `widget-${username}`;
+        widget.innerHTML = `
+            <div class="chat-widget-header" onclick="toggleWidgetMinimize('${username}')">
+                <span class="small fw-bold text-truncate" style="max-width: 200px;"><i class="bi bi-person-fill me-1"></i> ${escapeHtml(fullName || username)}</span>
+                <div class="d-flex gap-2">
+                    <i class="bi bi-dash-lg" style="cursor: pointer;"></i>
+                    <i class="bi bi-x-lg" onclick="event.stopPropagation(); closeChatWidget('${username}')" style="cursor: pointer;"></i>
+                </div>
+            </div>
+            <div class="chat-widget-body" id="body-${username}"></div>
+            <div class="chat-widget-footer">
+                <form onsubmit="event.preventDefault(); sendWidgetMessage('${username}')">
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" placeholder="Mensaje..." autocomplete="off">
+                        <button class="btn btn-primary" type="submit"><i class="bi bi-send"></i></button>
+                    </div>
+                </form>
+            </div>
+        `;
+        
+        document.getElementById('chat-widgets-container').appendChild(widget);
+        activeWidgets[username] = widget;
+        widget.dataset.forceBottom = '1';
+        
+        // Cargar historial inicial para este widget
+        loadWidgetHistory(username);
+        
+        // Iniciar polling para este widget
+        const intervalId = setInterval(() => loadWidgetHistory(username), 4000);
+        widget.dataset.intervalId = intervalId;
+
+        if (saveToOpen) widget.querySelector('input').focus();
+    }
+
+    function savePersistenceData() {
+        localStorage.setItem(`contacts_${currentUser}`, JSON.stringify(Array.from(recentContacts)));
+        localStorage.setItem(`open_widgets_data_${currentUser}`, JSON.stringify(openWidgetsData));
+        localStorage.setItem(`unread_${currentUser}`, JSON.stringify(unreadCounts));
+    }
+
+    function clearUnread(username) {
+        if (unreadCounts[username]) {
+            delete unreadCounts[username];
+            savePersistenceData();
+        }
+    }
+
+    function markUnread(username) {
+        recentContacts.add(username);
+        unreadCounts[username] = (unreadCounts[username] || 0) + 1;
+        savePersistenceData();
+        updateRecentContactsUI();
+    }
+
+    function closeChatWidget(username) {
+        if (activeWidgets[username]) {
+            clearInterval(activeWidgets[username].dataset.intervalId);
+            activeWidgets[username].remove();
+            delete activeWidgets[username];
+            delete openWidgetsData[username];
+            savePersistenceData();
+            updateRecentContactsUI();
+        }
+    }
+
+    function toggleWidgetMinimize(username) {
+        const body = document.getElementById(`body-${username}`);
+        const footer = activeWidgets[username].querySelector('.chat-widget-footer');
+        if (body.style.display === 'none') {
+            body.style.display = 'flex';
+            footer.style.display = 'block';
+            clearUnread(username);
+        } else {
+            body.style.display = 'none';
+            footer.style.display = 'none';
+        }
+    }
+
+    function ensureWidgetExpanded(username) {
+        if (!activeWidgets[username]) return;
+        const body = document.getElementById(`body-${username}`);
+        const footer = activeWidgets[username].querySelector('.chat-widget-footer');
+        body.style.display = 'flex';
+        footer.style.display = 'block';
+        clearUnread(username);
+    }
+
+    async function loadWidgetHistory(username) {
+        if (!activeWidgets[username]) return;
+        const body = document.getElementById(`body-${username}`);
+        const widget = activeWidgets[username];
+        try {
+            const response = await fetch(`/api/messages/?chat_with=${encodeURIComponent(username)}`);
+            const data = await response.json();
+            
+            const currentScroll = body.scrollTop;
+            const deltaToBottom = body.scrollHeight - body.scrollTop - body.clientHeight;
+            const isAtBottom = deltaToBottom <= 8;
+            const forceBottom = widget && widget.dataset.forceBottom === '1';
+
+            body.innerHTML = '';
+            if (data.messages && data.messages.length > 0) {
+                data.messages.forEach(msg => {
+                    const isMe = msg.username === currentUser;
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = `p-2 small rounded mb-2 ${isMe ? 'bg-primary text-white ms-auto' : 'bg-white border'}`;
+                    msgDiv.style.maxWidth = '85%';
+                    msgDiv.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+                    msgDiv.innerHTML = `
+                        <div class="fw-bold" style="font-size: 0.65rem; opacity: 0.8; margin-bottom: 2px;">${isMe ? 'Tú' : (msg.username || 'Usuario')}</div>
+                        <div style="word-wrap: break-word;">${escapeHtml(msg.content)}</div>
+                        <div class="text-end" style="font-size: 0.55rem; opacity: 0.6; margin-top: 2px;">${msg.timestamp.split(' ')[1]}</div>
+                    `;
+                    body.appendChild(msgDiv);
+                });
+            } else if (body.innerHTML === '') {
+                body.innerHTML = '<div class="text-center text-muted mt-5 small">No hay mensajes aún.</div>';
+            }
+
+            if (forceBottom || isAtBottom) body.scrollTop = body.scrollHeight;
+            else body.scrollTop = currentScroll;
+            if (widget) widget.dataset.forceBottom = '0';
+            clearUnread(username);
+
+        } catch (e) { console.error("Error cargando widget:", e); }
+    }
+
+    async function sendWidgetMessage(username) {
+        const widget = activeWidgets[username];
+        const input = widget.querySelector('input');
+        const submitBtn = widget.querySelector('button[type="submit"]');
+        const content = input.value.trim();
+        if (!content) return;
+
+        // Feedback visual
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        const formData = new FormData();
+        formData.append('content', content);
+        formData.append('target_user', username);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        formData.append('is_emergency', 'false');
+
+        try {
+            const response = await fetch("{% url 'send_message' %}", {
+                method: 'POST',
+                body: formData
+            });
+            if (response.ok) {
+                input.value = '';
+                loadWidgetHistory(username);
+            }
+        } catch (e) { 
+            console.error("Error enviando widget msg:", e);
+            showNotification('Error al enviar mensaje privado', 'danger');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="bi bi-send"></i>';
+        }
+    }
+
+    function updateRecentContactsUI() {
+        const list = document.getElementById('recent-contacts-list');
+        list.innerHTML = '';
+        recentContacts.forEach(username => {
+            const avatar = document.createElement('div');
+            const unread = unreadCounts[username] || 0;
+            avatar.className = `contact-avatar shadow-sm ${activeWidgets[username] ? 'active' : ''} ${unread ? 'unread' : ''}`;
+            avatar.title = username;
+            avatar.innerHTML = `<span>${username.substring(0, 2).toUpperCase()}</span>${unread ? `<span class="badge-unread">${unread > 9 ? '9+' : unread}</span>` : ''}`;
+            avatar.onclick = () => {
+                // Para simplificar, buscamos el nombre completo del perfil si ya lo tenemos o usamos el username
+                openChatWidget(username, username);
+            };
+            list.appendChild(avatar);
+        });
+
+        const mobileList = document.getElementById('mobile-contacts-list');
+        if (!mobileList) return;
+        mobileList.innerHTML = '';
+        Array.from(recentContacts).forEach(username => {
+            const unread = unreadCounts[username] || 0;
+            const pill = document.createElement('div');
+            pill.className = `mobile-contact shadow-sm ${activeWidgets[username] ? 'active' : ''} ${unread ? 'unread' : ''}`;
+            pill.title = username;
+            pill.innerHTML = `<span class="fw-bold">${username.substring(0, 2).toUpperCase()}</span>${unread ? `<span class="badge-unread">${unread > 9 ? '9+' : unread}</span>` : ''}`;
+            pill.onclick = () => openChatWidget(username, openWidgetsData[username] || username);
+            mobileList.appendChild(pill);
+        });
+    }
+
+    function selectTarget(username, displayName) {
+        // Al seleccionar del buscador, ahora abrimos el widget en lugar de cambiar el chat central
+        if (username !== 'broadcast') {
+            openChatWidget(username, displayName);
+            // Limpiar buscador
+            document.getElementById('user-search').value = '';
+            searchUsers();
+        } else {
+            currentTarget = 'broadcast';
+            // Lógica original de broadcast...
+        }
+    }
+
+    // Función para buscar usuarios en tiempo real
+    let searchTimeout;
+    function searchUsers() {
+        clearTimeout(searchTimeout);
+        const query = document.getElementById('user-search').value.trim();
+        
+        if (query.length < 2) {
+            // Limpiar lista si la búsqueda es corta
+            const list = document.getElementById('users-list');
+            const broadcast = document.getElementById('target-broadcast');
+            const placeholder = document.getElementById('search-placeholder');
+            list.innerHTML = '';
+            list.appendChild(broadcast);
+            if (placeholder) list.appendChild(placeholder);
+            else {
+                const div = document.createElement('div');
+                div.id = 'search-placeholder';
+                div.className = 'list-group-item text-center text-muted py-3 small';
+                div.textContent = 'Escribe para buscar personas...';
+                list.appendChild(div);
+            }
+            return;
+        }
+
+        searchTimeout = setTimeout(async () => {
+            try {
+                const response = await fetch(`/api/users-list/?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                const list = document.getElementById('users-list');
+                const broadcast = document.getElementById('target-broadcast');
+                
+                list.innerHTML = '';
+                list.appendChild(broadcast);
+                
+                if (data.users.length === 0) {
+                    const div = document.createElement('div');
+                    div.className = 'list-group-item text-center text-muted py-3 small';
+                    div.textContent = 'No se encontraron usuarios.';
+                    list.appendChild(div);
+                }
+
+                data.users.forEach(user => {
+                    const item = document.createElement('div');
+                    item.id = `target-${user.username}`;
+                    item.className = `list-group-item list-group-item-action py-2 ${currentTarget === user.username ? 'active' : ''}`;
+                    item.onclick = () => selectTarget(user.username, user.full_name);
+                    
+                    item.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold" style="font-size: 0.85rem;">${escapeHtml(user.full_name)}</div>
+                                <small class="text-muted" style="font-size: 0.7rem;">ID LoRa: ${user.lora_id}</small>
+                            </div>
+                            ${currentTarget === user.username ? '<i class="bi bi-check-circle-fill"></i>' : ''}
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
+            } catch (e) { console.error("Error buscando usuarios:", e); }
+        }, 300); // Delay de 300ms para no saturar
+    }
+
+    // Función para añadir un mensaje al chat
+    function appendMessage(msg) {
+        const isSent = msg.username === currentUser;
+        const isEmergency = msg.is_emergency || false;
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isSent ? 'message-sent ms-auto' : 'message-received'} p-2 mb-2 border shadow-sm`;
+        
+        // Estilo especial para emergencias
+        if (isEmergency) {
+            messageDiv.classList.add('border-danger', 'bg-light-danger');
+            messageDiv.style.borderLeft = "4px solid #dc3545";
+        }
+
+        messageDiv.style.maxWidth = '85%';
+        messageDiv.style.borderRadius = '10px';
+        if (isSent) {
+            messageDiv.style.backgroundColor = '#e3f2fd';
+            messageDiv.style.borderBottomRightRadius = '2px';
+        } else {
+            messageDiv.style.backgroundColor = '#f1f1f1';
+            messageDiv.style.borderBottomLeftRadius = '2px';
+        }
+        
+        const zoneBadge = msg.zone ? `<span class="badge bg-secondary" style="font-size: 0.6rem;">${msg.zone}</span>` : '';
+        const emergencyBadge = isEmergency ? `<span class="badge bg-danger" style="font-size: 0.6rem;">🚨 EMERGENCIA</span>` : '';
+        
+        messageDiv.innerHTML = `
+            <div class="message-header d-flex justify-content-between">
+                <strong>
+                    ${escapeHtml(msg.username)} 
+                    ${zoneBadge}
+                    ${emergencyBadge}
+                </strong>
+                <small class="ms-2">${msg.timestamp}</small>
+            </div>
+            <div class="message-body">
+                ${escapeHtml(msg.content)}
+            </div>
+        `;
+        
+        chatBox.appendChild(messageDiv);
+        // Forzar scroll al fondo siempre que se añade un mensaje
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+    
+    // Función para escapar HTML
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Función para generar ID único de mensaje
+    function generateMessageId(msg) {
+        return `${msg.username}_${msg.content}_${msg.timestamp}`;
+    }
+    
+    // Lógica original de broadcast
+    let currentTarget = 'broadcast';
+    let lastMessageCount = 0;
+    let messageIds = new Set();
+
+    async function loadMessages() {
+        try {
+            const response = await fetch("{% url 'get_messages' %}");
+            const data = await response.json();
+            
+            if (data.messages.length !== lastMessageCount) {
+                chatBox.innerHTML = '';
+                messageIds.clear();
+                data.messages.forEach(msg => {
+                    const msgId = generateMessageId(msg);
+                    if (!messageIds.has(msgId)) {
+                        messageIds.add(msgId);
+                        appendMessage(msg);
+                    }
+                });
+                lastMessageCount = data.messages.length;
+            }
+        } catch (error) { console.error('Error cargando mensajes:', error); }
+    }
+
+    let privateInboxAfterId = parseInt(localStorage.getItem(`private_after_${currentUser}`) || '0', 10) || 0;
+    let privateInboxInitialized = false;
+    const PRIVATE_INIT_WINDOW_MS = 15000;
+
+    async function pollPrivateInbox() {
+        try {
+            const response = await fetch(`/api/private-inbox/?after_id=${privateInboxAfterId}`);
+            const data = await response.json();
+            const msgs = data.messages || [];
+            if (msgs.length === 0) return;
+
+            const maxId = Math.max(...msgs.map(m => m.id || 0));
+            if (!privateInboxInitialized) {
+                privateInboxAfterId = Math.max(privateInboxAfterId, maxId);
+                localStorage.setItem(`private_after_${currentUser}`, String(privateInboxAfterId));
+                privateInboxInitialized = true;
+                const now = Date.now();
+                msgs.forEach(m => {
+                    const senderUsername = m.sender_username;
+                    const senderFullName = m.sender_full_name || senderUsername;
+                    if (!senderUsername || senderUsername === 'Sistema') return;
+                    if (senderUsername === currentUser) return;
+                    if ((now - (m.ts_ms || 0)) <= PRIVATE_INIT_WINDOW_MS) {
+                        openChatWidget(senderUsername, senderFullName, true);
+                        ensureWidgetExpanded(senderUsername);
+                        loadWidgetHistory(senderUsername);
+                    } else {
+                        markUnread(senderUsername);
+                    }
+                });
+                return;
+            }
+
+            msgs.forEach(m => {
+                privateInboxAfterId = Math.max(privateInboxAfterId, m.id || 0);
+                localStorage.setItem(`private_after_${currentUser}`, String(privateInboxAfterId));
+                const senderUsername = m.sender_username;
+                const senderFullName = m.sender_full_name || senderUsername;
+                if (!senderUsername || senderUsername === 'Sistema') return;
+                if (senderUsername === currentUser) return;
+
+                const wasOpen = !!activeWidgets[senderUsername];
+                openChatWidget(senderUsername, senderFullName, true);
+                ensureWidgetExpanded(senderUsername);
+                loadWidgetHistory(senderUsername);
+                if (!wasOpen) {
+                    markUnread(senderUsername);
+                }
+            });
+        } catch (e) {
+            console.error('Error leyendo inbox privado:', e);
+        }
+    }
+
+    function updateConnectedBadges() {
+        const nodeBadge = document.getElementById('connected-node-badge');
+        if (nodeBadge) {
+            nodeBadge.textContent = `LoRa: ${connectedNodeId ? connectedNodeId : '--'}`;
+        }
+    }
+
+    async function syncUserToConnectedNode(nodeId) {
+        if (!nodeId || isSyncingNode) return;
+        isSyncingNode = true;
+        try {
+            const csrfToken = getCookie('csrftoken');
+            const response = await fetch('/api/update-user-node/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken || '' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ node_id: nodeId })
+            });
+            const data = await response.json();
+            if (data && data.status === 'ok') {
+                connectedNodeId = nodeId;
+                updateConnectedBadges();
+                const userIdBadge = document.getElementById('user-id-badge');
+                if (userIdBadge && data.full_id) {
+                    userIdBadge.textContent = `Mi ID: ${data.full_id}`;
+                }
+            }
+        } catch (e) {
+            console.error('Error sincronizando nodo del usuario:', e);
+        } finally {
+            isSyncingNode = false;
+        }
+    }
+
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+
+    function pickBestNode(nodes) {
+        if (!Array.isArray(nodes) || nodes.length === 0) return null;
+        return nodes.find(n => n.status === 'online') || nodes.find(n => n.status === 'away') || nodes[0] || null;
+    }
+
+    async function autoSelectConnectedNode(nodes) {
+        updateConnectedBadges();
+        const hasCurrent = connectedNodeId && nodes.some(n => n.id === connectedNodeId && (n.status === 'online' || n.status === 'away'));
+        if (hasCurrent) return;
+        const best = pickBestNode(nodes);
+        if (!best || !best.id) return;
+        if (best.id === connectedNodeId) return;
+        await syncUserToConnectedNode(best.id);
+    }
+    
+    
+    // Función para actualizar el estado de los nodos
+    async function updateNodeStatus() {
+        try {
+            const response = await fetch("/api/node-status/");
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            
+            const nodesList = document.getElementById('nodes-list');
+            
+            // Actualizar contadores globales
+            document.getElementById('active-nodes-count').textContent = data.active_count;
+            document.getElementById('messages-today').textContent = data.messages_today;
+
+            if (data.nodes.length === 0) {
+                nodesList.innerHTML = '<div class="list-group-item text-center text-muted py-3"><i class="bi bi-wifi-off"></i><br><small>No hay nodos detectados en la red.</small></div>';
+                connectedNodeId = null;
+                updateConnectedBadges();
+                return;
+            }
+            
+            nodesList.innerHTML = '';
+            data.nodes.forEach(node => {
+                const isOffline = node.status === 'offline';
+                const statusClass = node.status === 'online' ? 'bg-success' : (node.status === 'away' ? 'bg-warning text-dark' : 'bg-danger');
+                const statusText = node.status === 'online' ? 'En línea' : (node.status === 'away' ? 'Inactivo' : 'Desconectado');
+                
+                // Corrección de batería: si está offline, mostrar 0% o gris
+                const batteryVal = isOffline ? 0 : node.battery;
+                const batteryIcon = isOffline ? 'bi-battery' : (batteryVal > 70 ? 'bi-battery-full' : (batteryVal > 30 ? 'bi-battery-half' : 'bi-battery'));
+                const batteryColor = isOffline ? 'text-secondary' : (batteryVal > 70 ? 'text-success' : (batteryVal > 30 ? 'text-warning' : 'text-danger'));
+                
+                const nodeHtml = `
+                    <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                        <div>
+                            <div class="fw-bold small ${isOffline ? 'text-muted' : ''}">
+                                <i class="bi bi-hdd-network"></i> ${escapeHtml(node.zone)}
+                            </div>
+                            <small class="text-muted" style="font-size: 0.7rem;">
+                                ID: ${node.id} | Visto: ${node.last_seen}
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge rounded-pill ${statusClass}">${statusText}</span>
+                            <div class="mt-1" style="font-size: 0.7rem;">
+                                <i class="bi ${batteryIcon} ${batteryColor}"></i> ${isOffline ? '--' : batteryVal + '%'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                nodesList.innerHTML += nodeHtml;
+            });
+
+            await autoSelectConnectedNode(data.nodes);
+            
+        } catch (error) {
+            console.error('Error actualizando nodos:', error);
+        }
+    }
+    
+    // Enviar mensaje
+    chatForm.onsubmit = async (e) => {
+        e.preventDefault();
+        const content = messageInput.value.trim();
+        if (!content) return;
+        
+        // Deshabilitar botón mientras se envía
+        const submitBtn = chatForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Enviando...';
+        
+        const formData = new FormData();
+        formData.append('content', content);
+        formData.append('target_user', currentTarget);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        formData.append('is_emergency', currentTarget === 'broadcast' ? 'true' : 'false');
+        
+        try {
+            const response = await fetch("{% url 'send_message' %}", {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.ok) {
+                let data = null;
+                try { data = await response.json(); } catch (e) { data = null; }
+                messageInput.value = ''; // Limpiar input
+                await loadMessages(); // Recargar mensajes
+                
+                if (data && data.route_missing) {
+                    showNotification('El destinatario aparece como "Sin nodo". El mensaje quedó guardado como privado y no se enviará por LoRa hasta que se actualice su ID (nodo.sub-id).', 'warning');
+                } else {
+                    showNotification('Mensaje enviado', 'success');
+                }
+            } else {
+                showNotification('Error al enviar mensaje', 'danger');
+            }
+        } catch (error) {
+            console.error('Error enviando mensaje:', error);
+            showNotification('Error de conexión', 'danger');
+        } finally {
+            submitBtn.disabled = false;
+            const btnIcon = currentTarget === 'broadcast' ? 'bi-send' : 'bi-person-lock';
+            const btnText = currentTarget === 'broadcast' ? 'Enviar' : 'Privado';
+            submitBtn.innerHTML = `<i class="bi ${btnIcon}"></i> ${btnText}`;
+        }
+    };
+    
+    // Función para mostrar notificaciones
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed bottom-0 end-0 m-3`;
+        notification.style.zIndex = '9999';
+        notification.style.minWidth = '250px';
+        notification.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+    
+    // Probar conexión LoRa
+    async function testLoRaConnection() {
+        showNotification('Enviando señal de prueba a la red LoRa...', 'info');
+        try {
+            const response = await fetch("/api/test-lora/");
+            const data = await response.json();
+            if (data.status === 'ok') {
+                showNotification(`✅ ${data.message}`, 'success');
+            } else {
+                showNotification('⚠️ Error al enviar prueba', 'warning');
+            }
+        } catch (error) {
+            showNotification('❌ Error de conexión con el servidor', 'danger');
+        }
+    }
+    
+    // Auto scroll al cargar
+    chatBox.scrollTop = chatBox.scrollHeight;
+    
+    // Actualizar cada 3 segundos (mensajes) y cada 10 segundos (nodos)
+    setInterval(loadMessages, 3000);
+    setInterval(pollPrivateInbox, 2000);
+    setInterval(updateNodeStatus, 10000);
+    
+    // Cargar datos iniciales
+    loadMessages();
+    pollPrivateInbox();
+    updateNodeStatus();
+    updateRecentContactsUI();
+    
+    // Restaurar widgets abiertos previamente
+    Object.keys(openWidgetsData).forEach(username => {
+        openChatWidget(username, openWidgetsData[username], false);
+    });
+    
+    // Enfocar input al cargar
+    messageInput.focus();
+
+    function setMobileMode(mode) {
+        if (mode === 'side') {
+            document.body.classList.add('mobile-show-side');
+            const chatBtn = document.getElementById('mobile-tab-chat');
+            const panelBtn = document.getElementById('mobile-tab-panel');
+            if (chatBtn && panelBtn) {
+                chatBtn.className = 'btn btn-sm btn-outline-danger flex-fill';
+                panelBtn.className = 'btn btn-sm btn-primary flex-fill';
+            }
+            localStorage.setItem(`mobile_mode_${currentUser}`, 'side');
+            return;
+        }
+
+        document.body.classList.remove('mobile-show-side');
+        const chatBtn = document.getElementById('mobile-tab-chat');
+        const panelBtn = document.getElementById('mobile-tab-panel');
+        if (chatBtn && panelBtn) {
+            chatBtn.className = 'btn btn-sm btn-danger flex-fill';
+            panelBtn.className = 'btn btn-sm btn-outline-primary flex-fill';
+        }
+        localStorage.setItem(`mobile_mode_${currentUser}`, 'chat');
+    }
+
+    const savedMode = localStorage.getItem(`mobile_mode_${currentUser}`) || 'chat';
+    setMobileMode(savedMode);
+
+    const mobileChatBtn = document.getElementById('mobile-tab-chat');
+    const mobilePanelBtn = document.getElementById('mobile-tab-panel');
+    if (mobileChatBtn && mobilePanelBtn) {
+        mobileChatBtn.addEventListener('click', () => setMobileMode('chat'));
+        mobilePanelBtn.addEventListener('click', () => setMobileMode('side'));
+    }
+    
+    // Enviar con Ctrl+Enter
+    messageInput.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            chatForm.dispatchEvent(new Event('submit'));
+        }
+    });
+</script>
+{% endblock %}
