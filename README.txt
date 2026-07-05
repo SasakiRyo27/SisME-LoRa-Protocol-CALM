@@ -222,7 +222,7 @@ Massimo Larger & Claudio Uribe
 📧 Contact
 For any questions or suggestions, feel free to contact us at:
 
-    massimoalv.27@gmail.com/
+    massimoalv.27@gmail.com/elpolodog@gmail.com
 
 🌟 Acknowledgments
 

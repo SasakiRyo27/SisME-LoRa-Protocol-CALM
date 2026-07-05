@@ -221,7 +221,7 @@ Massimo Larger y Claudio Uribe
 
 📧 Contacto
 Para cualquier consulta o sugerencia, no dudes en contactarnos a los correos.
-	massimoalv.27@gmail.com/
+	massimoalv.27@gmail.com/elpolodog@gmail.com
 
 ¡SisME + CALM: Comunicación de emergencia para cuando más se necesita! 📡🆘
 
